@@ -39,6 +39,7 @@ import (
 	util "github.com/openstack-k8s-operators/lib-common/modules/common/util"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -55,8 +56,9 @@ const (
 // OpenStackAnsibleEEReconciler reconciles a OpenStackAnsibleEE object
 type OpenStackAnsibleEEReconciler struct {
 	client.Client
-	Kclient kubernetes.Interface
-	Scheme  *runtime.Scheme
+	Kclient  kubernetes.Interface
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
 // GetLogger returns a logger object with a prefix of "controller.name" and additional controller context fields
@@ -95,6 +97,7 @@ func (r *OpenStackAnsibleEEReconciler) Reconcile(ctx context.Context, req ctrl.R
 		r.Kclient,
 		r.Scheme,
 		Log,
+		r.Recorder,
 	)
 
 	if err != nil {
@@ -160,10 +163,11 @@ func (r *OpenStackAnsibleEEReconciler) Reconcile(ctx context.Context, req ctrl.R
 					netAtt))
 				return ctrl.Result{RequeueAfter: time.Second * 10}, fmt.Errorf("network-attachment-definition %s not found", netAtt)
 			}
+			r.Recorder.Event(instance, corev1.EventTypeWarning, "NetworkAttachmentsError", fmt.Sprintf("ansibleee-%s error", instance.Name))
 			instance.Status.Conditions.Set(condition.FalseCondition(
 				condition.NetworkAttachmentsReadyCondition,
 				condition.ErrorReason,
-				condition.SeverityWarning,
+				condition.SeverityError,
 				condition.NetworkAttachmentsReadyErrorMessage,
 				err.Error()))
 			return ctrl.Result{}, err
@@ -217,10 +221,11 @@ func (r *OpenStackAnsibleEEReconciler) Reconcile(ctx context.Context, req ctrl.R
 	}
 
 	if err != nil {
+		r.Recorder.Event(instance, corev1.EventTypeWarning, "AnsibleExecutionJobError", fmt.Sprintf("ansibleee-%s failed", instance.Name))
 		instance.Status.Conditions.Set(condition.FalseCondition(
 			ansibleeev1.AnsibleExecutionJobReadyCondition,
 			condition.ErrorReason,
-			condition.SeverityWarning,
+			condition.SeverityError,
 			ansibleeev1.AnsibleExecutionJobErrorMessage,
 			err.Error()))
 		instance.Status.JobStatus = ansibleeev1.JobStatusFailed
@@ -232,6 +237,9 @@ func (r *OpenStackAnsibleEEReconciler) Reconcile(ctx context.Context, req ctrl.R
 		Log.Info(fmt.Sprintf("AnsibleEE CR '%s' - Job %s hash added - %s", instance.Name, jobDef.Name, instance.Status.Hash[ansibleeeJobType]))
 	}
 
+	if !savedConditions.IsTrue(condition.ReadyCondition) {
+		r.Recorder.Event(instance, corev1.EventTypeNormal, "AnsibleExecutionJobReady", fmt.Sprintf("ansibleee-%s succeeded", instance.Name))
+	}
 	instance.Status.Conditions.MarkTrue(ansibleeev1.AnsibleExecutionJobReadyCondition, ansibleeev1.AnsibleExecutionJobReadyMessage)
 	instance.Status.JobStatus = ansibleeev1.JobStatusSucceeded
 

@@ -79,3 +79,7 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
+
+replace github.com/openstack-k8s-operators/lib-common/modules/common => github.com/fao89/lib-common/modules/common v0.0.0-20240415103721-c3153b229094
+
+replace github.com/openstack-k8s-operators/lib-common/modules/storage => github.com/fao89/lib-common/modules/storage v0.0.0-20240415103721-c3153b229094

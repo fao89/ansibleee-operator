@@ -43,21 +43,20 @@ apiVersion: kuttl.dev/v1beta1
 kind: TestAssert
 commands:
   - script: |
+      set -euxo pipefail
       pod=$(oc get pods -n $NAMESPACE -l app=openstackansibleee,job-name=ansibleee-play-debug -o name)
       description=$(oc describe -n $NAMESPACE "$pod")
-      playbook_present=$(echo "$description" | grep 'Hello, world this is ansibleee-play-debug.yaml')
-      cmdline_present=$(echo "$description" | grep 'Hello, world this is ansibleee-play-debug.yaml')
       echo Pod name: $pod
       echo Description: $description
-      if [ -n "$playbook_present" ]; then
-        exit 0
-      else
+      playbook_present=$(echo "$description" | grep 'Hello, world this is ansibleee-play-debug.yaml')
+      if [ -z "$playbook_present" ]; then
+        echo playbook is not present
         exit 1
       fi
-      if [ -z "$cmdline_present" ]; then
+      cmdline_present=$(echo "$description" | grep 'echo This shouldn't be printed.')
+      if [ -n "$cmdline_present" ]; then
+        echo cmdline is present
         exit 1
-      else
-        exit 0
       fi
 ---
 # when using image digests the containerImage URLs are SHA's so we verify them with a script
